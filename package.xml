@@ -10,6 +10,7 @@
 
 
   <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>message_generation</build_depend>
   <build_depend>caric_mission</build_depend>
   <build_depend>geometry_msgs</build_depend>
   <build_depend>mav_msgs</build_depend>
@@ -34,6 +35,7 @@
   <build_export_depend>trajectory_msgs</build_export_depend>
   <exec_depend>caric_mission</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>message_runtime</exec_depend>
   <exec_depend>mav_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>pcl_conversions</exec_depend>
