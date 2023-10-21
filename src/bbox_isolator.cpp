@@ -89,7 +89,7 @@ int main(int argc, char **argv){
 	ros::NodeHandle nh;
 
 	// Debugging 
-	ROS_INFO("BBox Isolator Node Started");
+	// ROS_INFO("BBox Isolator Node Started");
 
 	// Bounding Box Publisher
 	ros::Publisher pub = nh.advertise<vixion_solution::bbox>("bbox_isolator", 1000);
@@ -156,8 +156,8 @@ int main(int argc, char **argv){
 				int index_raf = std::distance(std::begin(distance_raf), it);
 
 				// Debugging
-				ROS_INFO("Index Jurong %d", index_jur);
-				ROS_INFO("Index Raffles %d", index_raf);
+				// ROS_INFO("Index Jurong %d", index_jur);
+				// ROS_INFO("Index Raffles %d", index_raf);
 
 				if ( index_jur == index_raf ){
 
@@ -228,6 +228,8 @@ int main(int argc, char **argv){
 
 				trajectory_msg_raf.points.push_back(trajpt_msg_raf);
 			}
+			// Debugging
+			ROS_INFO("Hey Reached the end finally!!\n");
 
 			pub.publish(bbox_isolator);
 		}
