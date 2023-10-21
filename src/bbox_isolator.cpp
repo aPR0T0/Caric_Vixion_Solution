@@ -38,15 +38,28 @@ std::vector<bool> visited;
 float target_yaw_jur = 0;
 float target_yaw_raf = 0;
 
-void MajorCallback(const sensor_msgs::PointCloud::ConstPtr& msg, const nav_msgs::Odometry::ConstPtr& msg_odo_jur, const nav_msgs::Odometry::ConstPtr& msg_odo_raf){
+void MajorCallback(const sensor_msgs::PointCloud::ConstPtr& msg){
 
-	for ( int i = 0; i < (msg->points.size()/4); i++){
+	// Debugging
+	ROS_INFO("Message Received %d", msg->points.size());
+	for ( int i = 0; i < msg->points.size(); i+=4){
 		geometry_msgs::Point32 point;
 		point.x = (msg->points[i].x + msg->points[i+1].x + msg->points[i+2].x + msg->points[i+3].x)/4;
 		point.y = (msg->points[i].y + msg->points[i+1].y + msg->points[i+2].y + msg->points[i+3].y)/4;
 		point.z = (msg->points[i].z + msg->points[i+1].z + msg->points[i+2].z + msg->points[i+3].z)/4;
 		bbox_isolator.midpoints.push_back(point);
 		visited.push_back(false);
+		// ROS_INFO("x: %f", point.x);
+	}
+	for ( int i = 0; i < msg->points.size(); i+=8){
+		geometry_msgs::Point32 point;
+		for ( int j = 0; j < 4; j++){
+			point.x = (msg->points[i+j].x + msg->points[i+j+1].x + msg->points[i+j+4].x + msg->points[i+j+5].x)/4;
+			point.y = (msg->points[i+j].y + msg->points[i+j+1].y + msg->points[i+j+4].y + msg->points[i+j+5].y)/4;
+			point.z = (msg->points[i+j].z + msg->points[i+j+1].z + msg->points[i+j+4].z + msg->points[i+j+5].z)/4;
+			bbox_isolator.midpoints.push_back(point);
+			visited.push_back(false);
+		}
 		// ROS_INFO("x: %f", point.x);
 	}
 
@@ -94,119 +107,133 @@ int main(int argc, char **argv){
 	typedef message_filters::sync_policies::ExactTime<nav_msgs::Odometry, nav_msgs::Odometry> MySyncPolicy2;
 	message_filters::Synchronizer<MySyncPolicy2> sync(MySyncPolicy2(1000), odo_jur, odo_raf);
 
-	sync.registerCallback(boost::bind(&OdoCallback, _1, _2));
 
 	while(ros::ok()){
 
 		// Making an array of distances from midpoints of each face to the current odometry readings
 		std::vector<float> distance_jur;
 		std::vector<float> distance_raf;
+		sync.registerCallback(boost::bind(&OdoCallback, _1, _2));
 
-		for (int i = 0 ; i < bbox_isolator.midpoints.size() ; i++){
-			
-			// Debugging
-			ROS_INFO("Midpoint %f", bbox_isolator.midpoints.size());
+		if ( sub_count == 1 ){
+			for (int i = 0 ; i < bbox_isolator.midpoints.size() ; i++){
+				
+				// Debugging
+				// ROS_INFO("Midpoint %d", bbox_isolator.midpoints.size());
 
-			distance_jur.push_back(sqrt(pow(bbox_isolator.midpoints[i].x-odo_jur1.pose.pose.position.x,2) + pow(bbox_isolator.midpoints[i].y-odo_jur1.pose.pose.position.y,2) + pow(bbox_isolator.midpoints[i].z-odo_jur1.pose.pose.position.z,2)));
-			distance_raf.push_back(sqrt(pow(bbox_isolator.midpoints[i].x-odo_raf1.pose.pose.position.x,2) + pow(bbox_isolator.midpoints[i].y-odo_raf1.pose.pose.position.y,2) + pow(bbox_isolator.midpoints[i].z-odo_raf1.pose.pose.position.z,2)));
+				distance_jur.push_back(sqrt(pow(bbox_isolator.midpoints[i].x-odo_jur1.pose.pose.position.x,2) + pow(bbox_isolator.midpoints[i].y-odo_jur1.pose.pose.position.y,2) + pow(bbox_isolator.midpoints[i].z-odo_jur1.pose.pose.position.z,2)));
+				distance_raf.push_back(sqrt(pow(bbox_isolator.midpoints[i].x-odo_raf1.pose.pose.position.x,2) + pow(bbox_isolator.midpoints[i].y-odo_raf1.pose.pose.position.y,2) + pow(bbox_isolator.midpoints[i].z-odo_raf1.pose.pose.position.z,2)));
 
-			// Debugging
-			ROS_INFO("Distance Jurong %f", distance_jur[i]);
-			ROS_INFO("Distance Jurong %f", distance_raf[i]);
-		}
-
-		// Trajectory msg for jurong
-		trajectory_msgs::MultiDOFJointTrajectory trajectory_msg_jur;
-		trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg_jur;
-		geometry_msgs::Transform transform_msg_jur;
-		geometry_msgs::Twist accel_msg_jur, vel_msg_jur;
-		trajectory_msg_jur.header.stamp = ros::Time::now();
-
-		// Trajectory msg for raffles
-		trajectory_msgs::MultiDOFJointTrajectory trajectory_msg_raf;
-		trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg_raf;
-		geometry_msgs::Transform transform_msg_raf;
-		geometry_msgs::Twist accel_msg_raf, vel_msg_raf;
-		trajectory_msg_raf.header.stamp = ros::Time::now();
-
-		for (int i = 0 ; i < bbox_isolator.midpoints.size() ; i++){
-
-			// Debugging
-			ROS_INFO("Distance Jurong %f", distance_jur[i]);
-			ROS_INFO("Distance Raffles %f", distance_raf[i]);
-
-			
-			auto it = std::min_element(std::begin(distance_jur), std::end(distance_jur));
-			int index_jur = std::distance(std::begin(distance_jur), it);
-			it = std::min_element(std::begin(distance_raf), std::end(distance_raf));
-			int index_raf = std::distance(std::begin(distance_raf), it);
-
-			if ( index_jur == index_raf ){
-				distance_jur.erase(distance_jur.begin()+index_jur);
-				it = std::min_element(std::begin(distance_jur), std::end(distance_jur));
-				int index_jur = std::distance(std::begin(distance_jur), it);
+				// Debugging
+				// ROS_INFO("Distance Jurong %f", distance_jur[i]);
+				// ROS_INFO("Distance Raffles %f", distance_raf[i]);
 			}
 
-			// Message setting for jurong
-			geometry_msgs::Vector3 point_jur;
-			point_jur.x = bbox_isolator.midpoints[index_jur].x;
-			point_jur.y = bbox_isolator.midpoints[index_jur].y;
-			point_jur.z = bbox_isolator.midpoints[index_jur].z;
-			transform_msg_jur.translation = point_jur;
-			visited[index_jur] = true;
-			distance_jur.erase(distance_jur.begin()+index_jur);
+			// Trajectory msg for jurong
+			trajectory_msgs::MultiDOFJointTrajectory trajectory_msg_jur;
+			trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg_jur;
+			geometry_msgs::Transform transform_msg_jur;
+			geometry_msgs::Twist accel_msg_jur, vel_msg_jur;
+			trajectory_msg_jur.header.stamp = ros::Time::now();
 
-			transform_msg_jur.rotation.x = 0;
-			transform_msg_jur.rotation.y = 0;
-			transform_msg_jur.rotation.z = sinf(target_yaw_jur*0.5);
-			transform_msg_jur.rotation.w = cosf(target_yaw_jur*0.5);
+			// Trajectory msg for raffles
+			trajectory_msgs::MultiDOFJointTrajectory trajectory_msg_raf;
+			trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg_raf;
+			geometry_msgs::Transform transform_msg_raf;
+			geometry_msgs::Twist accel_msg_raf, vel_msg_raf;
+			trajectory_msg_raf.header.stamp = ros::Time::now();
 
-			trajpt_msg_jur.transforms.push_back(transform_msg_jur);
+			for (int i = 0 ; i < bbox_isolator.midpoints.size() ; i++){
 
-			vel_msg_jur.linear.x = 0;
-			vel_msg_jur.linear.y = 0;
-			vel_msg_jur.linear.z = 0;
+				// Debugging
+				// ROS_INFO("Distance Jurong %f", distance_jur[i]);
+				// ROS_INFO("Distance Raffles %f", distance_raf[i]);
 
-			accel_msg_jur.linear.x = 0;
-			accel_msg_jur.linear.y = 0;
-			accel_msg_jur.linear.z = 0;
+				
+				auto it = std::min_element(std::begin(distance_jur), std::end(distance_jur));
+				int index_jur = std::distance(std::begin(distance_jur), it);
+				it = std::min_element(std::begin(distance_raf), std::end(distance_raf));
+				int index_raf = std::distance(std::begin(distance_raf), it);
 
-			trajpt_msg_jur.velocities.push_back(vel_msg_jur);
-			trajpt_msg_jur.accelerations.push_back(accel_msg_jur);
+				// Debugging
+				ROS_INFO("Index Jurong %d", index_jur);
+				ROS_INFO("Index Raffles %d", index_raf);
 
-			trajectory_msg_jur.points.push_back(trajpt_msg_jur);
+				if ( index_jur == index_raf ){
 
-			// Message setting for raffles
-			geometry_msgs::Vector3 point_raf;
-			point_raf.x = bbox_isolator.midpoints[index_raf].x;
-			point_raf.y = bbox_isolator.midpoints[index_raf].y;
-			point_raf.z = bbox_isolator.midpoints[index_raf].z;
-			transform_msg_jur.translation = point_raf;	
-			visited[index_raf] = true;
-			distance_raf.erase(distance_raf.begin()+index_raf);
+					// Debugging
+					// ROS_INFO("Index Jurong %d", index_jur);
+					// ROS_INFO("Index Raffles %d", index_raf);
 
-			transform_msg_raf.rotation.x = 0;
-			transform_msg_raf.rotation.y = 0;
-			transform_msg_raf.rotation.z = sinf(target_yaw_raf*0.5);
-			transform_msg_raf.rotation.w = cosf(target_yaw_raf*0.5);
+					distance_jur.erase(distance_jur.begin()+index_jur);
+					it = std::min_element(std::begin(distance_jur), std::end(distance_jur));
+					index_jur = std::distance(std::begin(distance_jur), it);
+				}
 
-			trajpt_msg_raf.transforms.push_back(transform_msg_raf);
-			
-			vel_msg_raf.linear.x = 0;
-			vel_msg_raf.linear.y = 0;
-			vel_msg_raf.linear.z = 0;
+				// Message setting for jurong
+				geometry_msgs::Vector3 point_jur;
+				point_jur.x = bbox_isolator.midpoints[index_jur].x;
+				point_jur.y = bbox_isolator.midpoints[index_jur].y;
+				point_jur.z = bbox_isolator.midpoints[index_jur].z;
+				transform_msg_jur.translation = point_jur;
+				visited[index_jur] = true;
+				distance_jur.erase(distance_jur.begin()+index_jur);
 
-			accel_msg_raf.linear.x = 0;
-			accel_msg_raf.linear.y = 0;
-			accel_msg_raf.linear.z = 0;
+				transform_msg_jur.rotation.x = 0;
+				transform_msg_jur.rotation.y = 0;
+				transform_msg_jur.rotation.z = sinf(target_yaw_jur*0.5);
+				transform_msg_jur.rotation.w = cosf(target_yaw_jur*0.5);
 
-			trajpt_msg_raf.velocities.push_back(vel_msg_raf);
-			trajpt_msg_raf.accelerations.push_back(accel_msg_raf);
+				trajpt_msg_jur.transforms.push_back(transform_msg_jur);
 
-			trajectory_msg_raf.points.push_back(trajpt_msg_raf);
+				vel_msg_jur.linear.x = 0;
+				vel_msg_jur.linear.y = 0;
+				vel_msg_jur.linear.z = 0;
+
+				accel_msg_jur.linear.x = 0;
+				accel_msg_jur.linear.y = 0;
+				accel_msg_jur.linear.z = 0;
+
+				trajpt_msg_jur.velocities.push_back(vel_msg_jur);
+				trajpt_msg_jur.accelerations.push_back(accel_msg_jur);
+
+				trajectory_msg_jur.points.push_back(trajpt_msg_jur);
+
+				// Message setting for raffles
+				geometry_msgs::Vector3 point_raf;
+				point_raf.x = bbox_isolator.midpoints[index_raf].x;
+				point_raf.y = bbox_isolator.midpoints[index_raf].y;
+				point_raf.z = bbox_isolator.midpoints[index_raf].z;
+				transform_msg_jur.translation = point_raf;	
+				visited[index_raf] = true;
+				distance_raf.erase(distance_raf.begin()+index_raf);
+
+				transform_msg_raf.rotation.x = 0;
+				transform_msg_raf.rotation.y = 0;
+				transform_msg_raf.rotation.z = sinf(target_yaw_raf*0.5);
+				transform_msg_raf.rotation.w = cosf(target_yaw_raf*0.5);
+
+				trajpt_msg_raf.transforms.push_back(transform_msg_raf);
+				
+				vel_msg_raf.linear.x = 0;
+				vel_msg_raf.linear.y = 0;
+				vel_msg_raf.linear.z = 0;
+
+				accel_msg_raf.linear.x = 0;
+				accel_msg_raf.linear.y = 0;
+				accel_msg_raf.linear.z = 0;
+
+				trajpt_msg_raf.velocities.push_back(vel_msg_raf);
+				trajpt_msg_raf.accelerations.push_back(accel_msg_raf);
+
+				trajectory_msg_raf.points.push_back(trajpt_msg_raf);
+			}
+
+			pub.publish(bbox_isolator);
 		}
-
-		pub.publish(bbox_isolator);
+		else{
+			ros::Subscriber sub = nh.subscribe("/gcs/bounding_box_vertices", 1000, MajorCallback);
+		}
 		// drone_cmd_jur.publish(trajectory_msg_jur);
 		// drone_cmd_raf.publish(trajectory_msg_raf);
 		ros::spinOnce();

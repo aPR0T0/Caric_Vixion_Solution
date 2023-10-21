@@ -21,6 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
   trajectory_msgs
   message_generation
   message_runtime
+  message_filters
 )
 
 ## System dependencies are found with CMake's conventions
