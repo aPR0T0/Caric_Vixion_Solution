@@ -41,6 +41,7 @@ float target_yaw_raf = 0;
 void MajorCallback(const sensor_msgs::PointCloud::ConstPtr& msg){
 
 	// Debugging
+	ROS_INFO("Sub Count %d", sub_count);
 	ROS_INFO("Message Received %d", msg->points.size());
 	for ( int i = 0; i < msg->points.size(); i+=8){
 		geometry_msgs::Point32 point;
@@ -98,13 +99,17 @@ int main(int argc, char **argv){
 	ros::Rate loop_rate(100);
 
 	// Bounding Box Subscriber
+
 	ros::Subscriber sub = nh.subscribe("/gcs/bounding_box_vertices", 1000, MajorCallback);
+	
 	message_filters::Subscriber<nav_msgs::Odometry> odo_jur(nh, "/jurong/ground_truth/odometry", 1);
 	message_filters::Subscriber<nav_msgs::Odometry> odo_raf(nh, "/raffles/ground_truth/odometry", 1);
 
 	typedef message_filters::sync_policies::ExactTime<nav_msgs::Odometry, nav_msgs::Odometry> MySyncPolicy2;
 	message_filters::Synchronizer<MySyncPolicy2> sync(MySyncPolicy2(1000), odo_jur, odo_raf);
 
+	trajectory_msgs::MultiDOFJointTrajectory trajectory_msg_jur;
+	trajectory_msgs::MultiDOFJointTrajectory trajectory_msg_raf;
 
 	while(ros::ok()){
 
@@ -113,7 +118,7 @@ int main(int argc, char **argv){
 		std::vector<float> distance_raf;
 		sync.registerCallback(boost::bind(&OdoCallback, _1, _2));
 
-		if ( sub_count == 1 ){
+		if ( sub_count >= 1 ){
 			for (int i = 0 ; i < bbox_isolator.midpoints.size() ; i++){
 				
 				// Debugging
@@ -128,14 +133,12 @@ int main(int argc, char **argv){
 			}
 
 			// Trajectory msg for jurong
-			trajectory_msgs::MultiDOFJointTrajectory trajectory_msg_jur;
 			trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg_jur;
 			geometry_msgs::Transform transform_msg_jur;
 			geometry_msgs::Twist accel_msg_jur, vel_msg_jur;
 			trajectory_msg_jur.header.stamp = ros::Time::now();
 
 			// Trajectory msg for raffles
-			trajectory_msgs::MultiDOFJointTrajectory trajectory_msg_raf;
 			trajectory_msgs::MultiDOFJointTrajectoryPoint trajpt_msg_raf;
 			geometry_msgs::Transform transform_msg_raf;
 			geometry_msgs::Twist accel_msg_raf, vel_msg_raf;
@@ -174,11 +177,13 @@ int main(int argc, char **argv){
 				point_jur.y = bbox_isolator.midpoints[index_jur].y;
 				point_jur.z = bbox_isolator.midpoints[index_jur].z;
 				// Debugging
-				ROS_INFO("Points %f", point_jur.x);
+				ROS_INFO("points_jurong %f", point_jur.x);
 
 				transform_msg_jur.translation = point_jur;
 				visited[index_jur] = true;
 				distance_jur[index_jur] = std::accumulate(std::begin(distance_jur), std::end(distance_jur), 1, std::multiplies<double>());
+
+				distance_jur[index_jur] < 0 ? distance_jur[index_jur] = -distance_jur[index_jur] : distance_jur[index_jur] = distance_jur[index_jur];
 
 
 				transform_msg_jur.rotation.x = 0;
@@ -206,9 +211,15 @@ int main(int argc, char **argv){
 				point_raf.x = bbox_isolator.midpoints[index_raf].x;
 				point_raf.y = bbox_isolator.midpoints[index_raf].y;
 				point_raf.z = bbox_isolator.midpoints[index_raf].z;
+
 				transform_msg_jur.translation = point_raf;	
+
+				ROS_INFO("points_raf %f", point_raf.x);
+
 				visited[index_raf] = true;
 				distance_raf[index_raf] = std::accumulate(std::begin(distance_raf), std::end(distance_raf), 1, std::multiplies<double>());
+
+				distance_raf[index_raf] < 0 ? distance_raf[index_raf] = -distance_raf[index_raf] : distance_raf[index_raf] = distance_raf[index_raf];
 
 				transform_msg_raf.rotation.x = 0;
 				transform_msg_raf.rotation.y = 0;
@@ -235,11 +246,11 @@ int main(int argc, char **argv){
 
 			pub.publish(bbox_isolator);
 		}
-		else{
-			ros::Subscriber sub = nh.subscribe("/gcs/bounding_box_vertices", 1000, MajorCallback);
-		}
-		// drone_cmd_jur.publish(trajectory_msg_jur);
-		// drone_cmd_raf.publish(trajectory_msg_raf);
+		// else{
+		// 	ros::Subscriber sub = nh.subscribe("/gcs/bounding_box_vertices", 1000, MajorCallback);
+		// }
+		drone_cmd_jur.publish(trajectory_msg_jur);
+		drone_cmd_raf.publish(trajectory_msg_raf);
 		ros::spinOnce();
 		loop_rate.sleep();
 	}
