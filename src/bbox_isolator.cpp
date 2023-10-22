@@ -42,17 +42,15 @@ void MajorCallback(const sensor_msgs::PointCloud::ConstPtr& msg){
 
 	// Debugging
 	ROS_INFO("Message Received %d", msg->points.size());
-	for ( int i = 0; i < msg->points.size(); i+=4){
-		geometry_msgs::Point32 point;
-		point.x = (msg->points[i].x + msg->points[i+1].x + msg->points[i+2].x + msg->points[i+3].x)/4;
-		point.y = (msg->points[i].y + msg->points[i+1].y + msg->points[i+2].y + msg->points[i+3].y)/4;
-		point.z = (msg->points[i].z + msg->points[i+1].z + msg->points[i+2].z + msg->points[i+3].z)/4;
-		bbox_isolator.midpoints.push_back(point);
-		visited.push_back(false);
-		// ROS_INFO("x: %f", point.x);
-	}
 	for ( int i = 0; i < msg->points.size(); i+=8){
 		geometry_msgs::Point32 point;
+		for ( int j = 0; j < 8; j+=4){
+			point.x = (msg->points[i+j].x + msg->points[i+j+1].x + msg->points[i+j+2].x + msg->points[i+j+3].x)/4;
+			point.y = (msg->points[i+j].y + msg->points[i+j+1].y + msg->points[i+j+2].y + msg->points[i+j+3].y)/4;
+			point.z = (msg->points[i+j].z + msg->points[i+j+1].z + msg->points[i+j+2].z + msg->points[i+j+3].z)/4;
+			bbox_isolator.midpoints.push_back(point);
+			visited.push_back(false);
+		}
 		for ( int j = 0; j < 4; j++){
 			point.x = (msg->points[i+j].x + msg->points[i+j+1].x + msg->points[i+j+4].x + msg->points[i+j+5].x)/4;
 			point.y = (msg->points[i+j].y + msg->points[i+j+1].y + msg->points[i+j+4].y + msg->points[i+j+5].y)/4;
@@ -78,7 +76,7 @@ void MajorCallback(const sensor_msgs::PointCloud::ConstPtr& msg){
 void OdoCallback(const nav_msgs::Odometry::ConstPtr& msg_odo_jur, const nav_msgs::Odometry::ConstPtr& msg_odo_raf){\
 
 	// Debugging
-	ROS_INFO("Message Received %f", msg_odo_jur->header.stamp.toSec());
+	// ROS_INFO("Message Received %f", msg_odo_jur->header.stamp.toSec());
 
 	odo_jur1 = *msg_odo_jur;
 	odo_raf1 = *msg_odo_raf;
@@ -175,9 +173,13 @@ int main(int argc, char **argv){
 				point_jur.x = bbox_isolator.midpoints[index_jur].x;
 				point_jur.y = bbox_isolator.midpoints[index_jur].y;
 				point_jur.z = bbox_isolator.midpoints[index_jur].z;
+				// Debugging
+				ROS_INFO("Points %f", point_jur.x);
+
 				transform_msg_jur.translation = point_jur;
 				visited[index_jur] = true;
-				distance_jur.erase(distance_jur.begin()+index_jur);
+				distance_jur[index_jur] = std::accumulate(std::begin(distance_jur), std::end(distance_jur), 1, std::multiplies<double>());
+
 
 				transform_msg_jur.rotation.x = 0;
 				transform_msg_jur.rotation.y = 0;
@@ -206,7 +208,7 @@ int main(int argc, char **argv){
 				point_raf.z = bbox_isolator.midpoints[index_raf].z;
 				transform_msg_jur.translation = point_raf;	
 				visited[index_raf] = true;
-				distance_raf.erase(distance_raf.begin()+index_raf);
+				distance_raf[index_raf] = std::accumulate(std::begin(distance_raf), std::end(distance_raf), 1, std::multiplies<double>());
 
 				transform_msg_raf.rotation.x = 0;
 				transform_msg_raf.rotation.y = 0;
