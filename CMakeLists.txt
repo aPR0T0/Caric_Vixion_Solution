@@ -24,6 +24,9 @@ find_package(catkin REQUIRED COMPONENTS
   message_filters
 )
 
+find_package(OpenMP REQUIRED)
+# find_package(octomap REQUIRED)
+include_directories(${OCTOMAP_INCLUDE_DIRS})
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
 
@@ -126,9 +129,13 @@ catkin_package(
 ## Specify additional locations of header files
 ## Your package locations should be listed before other locations
 include_directories(
-# include
+  include
   ${catkin_INCLUDE_DIRS}
+  ${caric_mission_INCLUDE_DIRS}
 )
+
+add_executable(baseline_planner src/baseline_planner.cpp)
+add_executable(gcs_task src/general_task_initial.cpp)
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
@@ -155,6 +162,8 @@ add_executable(get_boxes src/bbox_isolator.cpp)
 ## same as for the library above
 add_dependencies(get_boxes ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
+target_link_libraries(gcs_task ${catkin_LIBRARIES} ${OpenMP_CXX_FLAGS})
+target_link_libraries(gcs_task ${OCTOMAP_LIBRARIES})
 ## Specify libraries to link a library or executable target against
 target_link_libraries(get_boxes
   ${catkin_LIBRARIES}
